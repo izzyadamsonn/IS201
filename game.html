@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Era Merge 2048</title>
+  <link rel="stylesheet" href="stylesheet.css">
+</head>
+<body>
+  <div class="sparkle">💿</div>
+  <div class="sparkle">✨</div>
+  <div class="sparkle">🎤</div>
+  <div class="sparkle">✨</div>
+
+  <a href="scratch.html" class="back-link">← Back</a>
+
+  <main class="game">
+    <header>
+      <div>
+        <h1>Era<br>2048</h1>
+        <p class="subtitle">Merge matching eras to unlock the ultimate album moment!</p><p class="subtitle" style="font-size:0.8rem;">Fan-made, unofficial album-inspired game.</p>
+      </div>
+      <div class="score-boxes">
+        <div class="score"><small>Score</small><span id="score">0</span></div>
+        <div class="score"><small>Best</small><span id="best">0</span></div>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <p>Use arrow keys, WASD, or swipe. Same eras merge into the next album!</p>
+      <button id="newGame">New Game</button>
+    </div>
+
+    <section class="board-wrap" id="touchArea">
+      <div class="board" id="board"></div>
+      <div class="overlay" id="overlay">
+        <div>
+          <h2 id="messageTitle">Yum!</h2>
+          <p id="messageText">You made something magical.</p>
+          <button id="again">Play Again</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="mobile" aria-label="Mobile controls">
+      <button class="ghost"></button>
+      <button data-move="up">▲</button>
+      <button class="ghost"></button>
+      <button data-move="left">◀</button>
+      <button data-move="down">▼</button>
+      <button data-move="right">▶</button>
+    </div>
+  </main>
+
+  <script>
+    const boardEl = document.getElementById("board");
+    const scoreEl = document.getElementById("score");
+    const bestEl = document.getElementById("best");
+    const overlay = document.getElementById("overlay");
+    const messageTitle = document.getElementById("messageTitle");
+    const messageText = document.getElementById("messageText");
+    const touchArea = document.getElementById("touchArea");
+
+    const size = 4;
+    const treats = {
+      2: "Debut",
+      4: "Fearless",
+      8: "Speak Now",
+      16: "Red",
+      32: "1989",
+      64: "reputation",
+      128: "Lover",
+      256: "folklore",
+      512: "evermore",
+      1024: "Midnights",
+      2048: "TTPD"
+    };
+
+    let board = [];
+    let score = 0;
+    let won = false;
+    let best = Number(localStorage.getItem("era-2048-best")) || 0;
+    bestEl.textContent = best;
+
+    function newGame() {
+      board = Array.from({ length: size }, () => Array(size).fill(0));
+      score = 0;
+      won = false;
+      overlay.classList.remove("show");
+      addRandomTile();
+      addRandomTile();
+      update();
+    }
+
+    function addRandomTile() {
+      const empty = [];
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          if (board[r][c] === 0) empty.push({ r, c });
+        }
+      }
+      if (!empty.length) return;
+      const spot = empty[Math.floor(Math.random() * empty.length)];
+      board[spot.r][spot.c] = Math.random() < 0.9 ? 2 : 4;
+    }
+
+    function update() {
+      scoreEl.textContent = score;
+      if (score > best) {
+        best = score;
+        bestEl.textContent = best;
+        localStorage.setItem("era-2048-best", best);
+      }
+
+      boardEl.innerHTML = "";
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const value = board[r][c];
+          const cell = document.createElement("div");
+          cell.className = "cell";
+
+          if (value) {
+            const tile = document.createElement("div");
+            tile.className = `tile v${value}`;
+            tile.textContent = treats[value] || "💖";
+            tile.title = value;
+            cell.appendChild(tile);
+          }
+
+          boardEl.appendChild(cell);
+        }
+      }
+    }
+
+    function slideLine(line) {
+      const filtered = line.filter(Boolean);
+      const result = [];
+      let gained = 0;
+
+      for (let i = 0; i < filtered.length; i++) {
+        if (filtered[i] === filtered[i + 1]) {
+          const merged = filtered[i] * 2;
+          result.push(merged);
+          gained += merged;
+          i++;
+        } else {
+          result.push(filtered[i]);
+        }
+      }
+
+      while (result.length < size) result.push(0);
+      return { result, gained };
+    }
+
+    function move(dir) {
+      const before = JSON.stringify(board);
+      let gained = 0;
+
+      if (dir === "left" || dir === "right") {
+        for (let r = 0; r < size; r++) {
+          let line = board[r].slice();
+          if (dir === "right") line.reverse();
+          const slid = slideLine(line);
+          let result = slid.result;
+          if (dir === "right") result.reverse();
+          board[r] = result;
+          gained += slid.gained;
+        }
+      }
+
+      if (dir === "up" || dir === "down") {
+        for (let c = 0; c < size; c++) {
+          let line = [];
+          for (let r = 0; r < size; r++) line.push(board[r][c]);
+          if (dir === "down") line.reverse();
+          const slid = slideLine(line);
+          let result = slid.result;
+          if (dir === "down") result.reverse();
+          for (let r = 0; r < size; r++) board[r][c] = result[r];
+          gained += slid.gained;
+        }
+      }
+
+      if (JSON.stringify(board) !== before) {
+        score += gained;
+        addRandomTile();
+        update();
+        checkState();
+      }
+    }
+
+    function checkState() {
+      if (!won && board.flat().includes(2048)) {
+        won = true;
+        showMessage("Era Icon!", "You unlocked the ultimate album era!");
+        return;
+      }
+
+      if (board.flat().includes(0)) return;
+
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const value = board[r][c];
+          if (board[r + 1]?.[c] === value || board[r]?.[c + 1] === value) return;
+        }
+      }
+
+      showMessage("All full!", "No more moves. Your eras still had a legendary run.");
+    }
+
+    function showMessage(title, text) {
+      messageTitle.textContent = title;
+      messageText.textContent = text;
+      overlay.classList.add("show");
+    }
+
+    document.addEventListener("keydown", e => {
+      const key = e.key.toLowerCase();
+      const map = {
+        arrowup: "up", w: "up",
+        arrowdown: "down", s: "down",
+        arrowleft: "left", a: "left",
+        arrowright: "right", d: "right"
+      };
+      if (map[key]) {
+        e.preventDefault();
+        move(map[key]);
+      }
+    });
+
+    document.querySelectorAll("[data-move]").forEach(button => {
+      button.addEventListener("click", () => move(button.dataset.move));
+    });
+
+    document.getElementById("newGame").addEventListener("click", newGame);
+    document.getElementById("again").addEventListener("click", newGame);
+
+    let startX = 0, startY = 0;
+
+    touchArea.addEventListener("pointerdown", e => {
+      startX = e.clientX;
+      startY = e.clientY;
+    });
+
+    touchArea.addEventListener("pointerup", e => {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 30) return;
+
+      if (Math.abs(dx) > Math.abs(dy)) {
+        move(dx > 0 ? "right" : "left");
+      } else {
+        move(dy > 0 ? "down" : "up");
+      }
+    });
+
+    newGame();
+  </script>
+</body>
+</html>
